@@ -181,7 +181,11 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+  int xr = x >> 1;
+  int new_x = (x & xr) | x;
+  // printf("%d\n", x);
+  // return isTmax(x + (x >> 1));
+  return !(new_x + 1);
 }
 /* 
  * negate - return -x 
@@ -204,7 +208,13 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+  int upper = x >> 4;
+  int cond1 = !(upper ^ 0x03);
+  // int lower = (x + ~0x30 + 1);            // x - 0x30
+  // int cond2 = (lower + ~10 + 1) >> 4;     // 0 <= lower <= 9
+  //           = (x + ~0x30 + ~0x0A + 2) >> 4;
+  int cond2 = (x + ~0x39) >> 4;
+  return cond1 & cond2;
 }
 /* 
  * conditional - same as x ? y : z 
@@ -214,7 +224,10 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  int mask = ~0 + !x;  // 0(y) -> ff   ;  1(z) -> 00
+  int yy =  mask & y;
+  int zz = ~mask & z;
+  return yy + zz;
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -244,9 +257,8 @@ int isLessOrEqual(int x, int y) {
  */
 int logicalNeg(int x) {
   int negx = ~x + 1;
-  int diff = negx ^ x;
-  int ret = ~(diff | x);
-  return (ret >> 31) & 1;
+  int zero = ~(x | negx);  // MSB: 1 iff x == 0
+  return (zero >> 31) & 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
