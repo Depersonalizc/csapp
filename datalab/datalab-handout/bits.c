@@ -181,11 +181,10 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  int xr = x >> 1;
-  int new_x = (x & xr) | x;
-  // printf("%d\n", x);
-  // return isTmax(x + (x >> 1));
-  return !(new_x + 1);
+  int BITS = 0x55;  // 0b01010101
+  int half = (BITS << 8 ) + BITS;
+  int mask = (half << 16) + half;
+  return !( (x | mask) + 1 );
 }
 /* 
  * negate - return -x 
@@ -262,18 +261,59 @@ int logicalNeg(int x) {
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
- *  Examples: howManyBits(12) = 5
- *            howManyBits(298) = 10
- *            howManyBits(-5) = 4
- *            howManyBits(0)  = 1
- *            howManyBits(-1) = 1
- *            howManyBits(0x80000000) = 32
+ *  Examples: howManyBits(12) = 5           0 . 1100        (1 + 4)
+ *            howManyBits(298) = 10         0 . 100101010   (1 + 9)
+ *            howManyBits(-5) = 4           1 . 011         (1 + 3)
+ *            howManyBits(0)  = 1           0 .             (1 + 0)
+ *            howManyBits(-1) = 1           1 .             (1 + 0)
+ *            howManyBits(0x80000000) = 32  1 . 00000...0   (1 + 31)
  *  Legal ops: ! ~ & ^ | + << >>
  *  Max ops: 90
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+
+  /* count #0's left of the leftmost 1 bit */
+  int ONES = ~0;
+  int count = 0;
+  int mask, tmpx;
+
+  /* negate x so that sign bit is 0 */
+  x ^= (x >> 31);  // if (x < 0) x = ~x;
+
+  tmpx = x >> 16;
+  mask = ~(ONES + !tmpx);
+  count += 16 & mask;     // if (!tmpx) count += 16;
+  x = (x & mask) | tmpx;  // if (tmpx) x = tmpx;
+
+  /* by now only the rightmost halfword (16 bits) of x can be non-zero */
+
+  tmpx = x >> 8;
+  mask = ~(ONES + !tmpx);
+  count += 8 & mask;      // if (!tmpx) count += 8;
+  x = (x & mask) | tmpx;  // if (tmpx) x = tmpx;
+
+  /* by now only the rightmost byte (8 bits) of x can be non-zero */
+
+  tmpx = x >> 4;
+  mask = ~(ONES + !tmpx);
+  count += 4 & mask;      // if (!tmpx) count += 4;
+  x = (x & mask) | tmpx;  // if (tmpx) x = tmpx;
+
+  /* by now only the rightmost halfbyte (4 bits) of x can be non-zero */
+  
+  tmpx = x >> 2;  // 2 bits
+  mask = ~(ONES + !tmpx);
+  count += 2 & mask;      // if (!tmpx) count += 2;
+  x = (x & mask) | tmpx;  // if (tmpx) x = tmpx;
+
+  /* by now only the rightmost 2 bits of x can be non-zero */
+
+  tmpx = x >> 1;  // 1 bit
+  mask = ~(ONES + !tmpx);
+  count += (3 + ~x) & mask;  // if (!tmpx) count += 2 - x;
+
+  return ~count + 34;  // 32 - (count - 1)
 }
 //float
 /* 
@@ -288,7 +328,16 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  unsigned exp = uf & 0x7F800000u;  // 8-bit exponent
+  unsigned sig = uf & 0x007FFFFFu;  // 23-bit significant
+  if (exp == 0x7F800000u)           // exp all ones, return as is
+    return uf;
+  if (exp)                          // normalized, add 1 to exponent
+    return uf + 0x00800000u;
+  /* exp all zeros, denormalized
+   * Lshift the lower 24 bits by 1
+   */
+  return (uf & 0xFF000000u) | (sig << 1);
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -303,7 +352,20 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  unsigned sgn = (uf >> 31);
+  unsigned exp = (uf & 0x7F800000u) >> 23;       // 8-bit exponent
+  unsigned sig = (uf & 0x007FFFFFu) | 0x800000;  // 23-bit significant with added 1
+  int rshift = 150 - exp;
+
+  /* denorm or overflow */
+  if (exp <  0x7F) return 0;           // exp : 0 ~ 011....0
+  if (exp >= 0x9F) return 0x80000000;  // E >= 32
+
+  /* E < 32, normalized */
+  if (rshift >= 0) sig >>= rshift;
+  else sig <<= -rshift;
+
+  return sgn? -sig : sig;
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -319,5 +381,12 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    /* min exponent: -149 = -126 - 23 */
+    if (x < -149) return 0u;
+    /* max denorm: -127 */
+    if (x <= -127) return 1 << (x + 149);
+    /* normalized: -126 <= x <= 127 */
+    if (x <= 127) return (x + 127) << 23;
+    /* max exponent: 127 */
+    return 0x7F800000u;
 }
