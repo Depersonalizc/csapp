@@ -1,2 +1,2 @@
 # csapp
-yet another csapp lab repo
+Yet another CS:APP3e lab repo (http://csapp.cs.cmu.edu)
