@@ -109,10 +109,6 @@ int main(int argc, char* argv[])
             /* print trace */
             line_buf[strcspn(line_buf, "\n")] = 0;
             printf("%s", &line_buf[1]);
-            // printf("%0*lx\t", (int)((MAX_ADDR_BITS + 3) / 4 ), addr);
-            // printf("tag: %0*lx\t", (int)((MAX_ADDR_BITS - (s+b) + 3) / 4), id.tbits);
-            // printf("set: %0*lx\t", (int)((s + 3) / 4), id.sbits);
-            // printf("bbits: %0*lx\n", (int)((b + 3) / 4), id.bbits);
 
             /* print status (hit/miss) */
             switch (status_0) {

@@ -29,22 +29,14 @@ void trans(int M, int N, int A[N][M], int B[M][N])
     }    
 }
 
-// void transpose_block(int M, int N, int A[N][M], int B[M][N],
-//                        int si, int sj, int block_h, int block_w) 
-// {
-//     /* Block with top-left corner (i, j)*/
-//     for (int i = si; i < si + block_h; i++) {
-//         for (int j = sj; j < sj + block_w; j++)
-//         {
-//             B[j][i] = A[i][j];
-//         }
-//     }
-// }
-
 void swap(int* a, int* b) {
     int tmp = *b;
     *b = *a;
     *a = tmp;
+}
+
+int min_int(int a, int b) {
+    return a < b? a : b;
 }
 
 /* 
@@ -57,17 +49,16 @@ void swap(int* a, int* b) {
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
-    // return;
     if (M == 32 && N == 32) {
+        // 32 x 32
         /* Transpose off-diag blocks, store in B */
         for (int si = 0; si < 32; si += MM_BSIZE) {
             for (int sj = 0; sj < 32; sj += MM_BSIZE) {
-                if (si == sj) continue; 
-                /* Transpose block */
-                for (int i = si; i < si + MM_BSIZE; i++) {
-                    for (int j = sj; j < sj + MM_BSIZE; j++) {
-                        B[j][i] = A[i][j];
-                    }
+                if (si != sj) {
+                    /* Transpose block */
+                    for (int i = si; i < si + MM_BSIZE; i++)
+                        for (int j = sj; j < sj + MM_BSIZE; j++)
+                            B[j][i] = A[i][j];
                 }
             }
         }
@@ -87,61 +78,42 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
                 for (int j = 0; j < MM_BSIZE; j++)
                     swap(&B[si+i][si+j], &B[ti+i][ti+j]);                    
         }
-
-    
     } else if (M == 64 && N == 64) {
-        /* Transpose off-diag blocks */
-
-        /* current A block (si, sj) and next A block (nsi, nsj)
-         * current B block (sj, si) and next B block (nsj, nsi) */
+        // 64 x 64
+        /* Transpose off-diag blocks
+         * current A block (si, sj) and next A block (nsi, nsj) below
+         * current B block (sj, si) and next B block (nsj, nsi) below */
         int si = 0, sj = 0, nsi, nsj;
-        // for (nsi = 0; nsi < 64; nsi += MM_BSIZE) {
-        //     for (nsj = 0; nsj < 64; nsj += MM_BSIZE) 
         for (nsj = 0; nsj < 64; nsj += MM_BSIZE) {
-            for (nsi = 0; nsi < 64; nsi += MM_BSIZE) 
-            {
-                // if (nsi == 0 && nsj == 0)
-                //     nsj = MM_BSIZE;  // init nsi, nsj
-                if (nsi == 0 && nsj == 0)
-                    nsi = MM_BSIZE;  // init nsi, nsj
-                
-                if (
-                // 1 || 
-                si != sj) {
-                    /* Transpose 4 mini-blocks */
+            for (nsi = 0; nsi < 64; nsi += MM_BSIZE) {
+                if (nsi == 0 && nsj == 0)  // init nsi, nsj
+                    nsi = MM_BSIZE;
 
+                if (si != sj) {
+                    /* Transpose 4 mini-blocks "in place" */
                     /* mini-block #0
-                    * i = si..si+3, j = sj..sj+3 */
+                     * i = si..si+3, j = sj..sj+3 */
                     for (int i = si; i < si + MM_MINIBSIZE; i++)
                         for (int j = sj; j < sj + MM_MINIBSIZE; j++)
                             B[j][i] = A[i][j];
-                    // for (int i = 0; i < MM_MINIBSIZE; i++)
-                    //     for (int j = 0; j < MM_MINIBSIZE; j++)
-                    //         B[sj + j][si + i] = A[si + i][sj + j];
 
                     /* mini-block #1 (STAGE ANSWER TO MINI-BLOCK #0 OF NEXT B BLOCK)
-                    * i = si..si+3, j = sj+4..sj+7 */
+                     * i = si..si+3, j = sj+4..sj+7 */
                     for (int i = 0; i < MM_MINIBSIZE; i++)
                         for (int j = 0; j < MM_MINIBSIZE; j++)
                             B[nsj + j][nsi + i] = A[si + i][sj+MM_MINIBSIZE + j];
 
                     /* mini-block #2
-                    * i = si+4..si+7, j = sj..sj+3 */
+                     * i = si+4..si+7, j = sj..sj+3 */
                     for (int i = si + MM_MINIBSIZE; i < si + MM_BSIZE; i++)
                         for (int j = sj; j < sj + MM_MINIBSIZE; j++)
                             B[j][i] = A[i][j];
-                    // for (int i = 0; i < MM_MINIBSIZE; i++)
-                    //     for (int j = 0; j < MM_MINIBSIZE; j++)
-                    //         B[sj + j][si+MM_MINIBSIZE + i] = A[si+MM_MINIBSIZE + i][sj + j];
 
                     /* mini-block #3
-                    * i = si+4..si+7, j = sj+4..sj+7 */
+                     * i = si+4..si+7, j = sj+4..sj+7 */
                     for (int i = si + MM_MINIBSIZE; i < si + MM_BSIZE; i++)
                         for (int j = sj + MM_MINIBSIZE; j < sj + MM_BSIZE; j++)
                             B[j][i] = A[i][j];
-                    // for (int i = 0; i < MM_MINIBSIZE; i++)
-                    //     for (int j = 0; j < MM_MINIBSIZE; j++)
-                    //         B[sj+MM_MINIBSIZE + j][si+MM_MINIBSIZE + i] = A[si+MM_MINIBSIZE + i][sj+MM_MINIBSIZE + j];
 
                     /* Move staged mini-block #1 
                     * from  next B block (nsj, nsi)
@@ -150,31 +122,76 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
                         for (int j = 0; j < MM_MINIBSIZE; j++)
                             B[sj+MM_MINIBSIZE + i][si + j] = B[nsj + i][nsi + j];
                 }
+
                 /* Update si, sj */
                 si = nsi;
                 sj = nsj;
             }
         }
         /* Transpose diag blocks */
-        // 0 <-> 16, 8 <-> 24
-        // for (int si = 0; si < 64; si += MM_BLOCKSIZE_64) {
-        //     int ti = 64 - MM_BLOCKSIZE_64 - si;
-        //     for (int i = 0; i < MM_BLOCKSIZE_64; i++)
-        //         for (int j = 0; j < MM_BLOCKSIZE_64; j++)
-        //             B[ti+j][ti+i] = A[si+i][si+j];
-        // }
-        // /* Swap */
-        // // 0 <-> 16, 8 <-> 24
-        // for (int si = 64 / 2; si < 64; si += MM_BLOCKSIZE_64) {
-        //     int ti = 64 - MM_BLOCKSIZE_64 - si;
-        //     for (int i = 0; i < MM_BLOCKSIZE_64; i++)
-        //         for (int j = 0; j < MM_BLOCKSIZE_64; j++)
-        //             swap(&B[si+i][si+j], &B[ti+i][ti+j]);                    
-        // }
-    } else {
-        trans(M, N, A, B);
-    }
+        for (si = 0; si < 64 / 2; si += MM_BSIZE) {
+            int ti = 64 - MM_BSIZE - si;
+            
+            // s -> t
+            /* mini-block #0 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[ti + j][ti + i] = A[si + i][si + j];
 
+            /* mini-block #1 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[ti+MM_MINIBSIZE + j][ti + i] = A[si + i][si+MM_MINIBSIZE + j];
+
+            /* mini-block #3 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[ti+MM_MINIBSIZE + j][ti+MM_MINIBSIZE + i] = A[si+MM_MINIBSIZE + i][si+MM_MINIBSIZE + j];
+
+            /* mini-block #2 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[ti + j][ti+MM_MINIBSIZE + i] = A[si+MM_MINIBSIZE + i][si + j];
+
+
+            // t -> s
+            /* mini-block #0 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[si + j][si + i] = A[ti + i][ti + j];
+
+            /* mini-block #1 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[si+MM_MINIBSIZE + j][si + i] = A[ti + i][ti+MM_MINIBSIZE + j];
+
+            /* mini-block #3 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[si+MM_MINIBSIZE + j][si+MM_MINIBSIZE + i] = A[ti+MM_MINIBSIZE + i][ti+MM_MINIBSIZE + j];
+
+            /* mini-block #2 */
+            for (int i = 0; i < MM_MINIBSIZE; i++)
+                for (int j = 0; j < MM_MINIBSIZE; j++)
+                    B[si + j][si+MM_MINIBSIZE + i] = A[ti+MM_MINIBSIZE + i][ti + j];
+
+            /* Swap s and t */
+            for (int i = 0; i < MM_BSIZE; i++)
+                for (int j = 0; j < MM_BSIZE; j++)
+                    swap(&B[si+i][si+j], &B[ti+i][ti+j]);
+        }
+    } else {
+        // 61 x 67
+        /* Naive block transpose with magic blocksize */
+        for (int si = 0; si < 67; si += MM_BLOCK_H) {
+            for (int sj = 0; sj < 61; sj += MM_BLOCK_W) {
+                /* Transpose block */
+                for (int i = si; i < min_int(si + MM_BLOCK_H, 67); i++)
+                    for (int j = sj; j < min_int(sj + MM_BLOCK_W, 61); j++)
+                        B[j][i] = A[i][j];
+            }
+        }
+    }
 
 }
 
@@ -196,8 +213,8 @@ void registerFunctions()
     /* Register your solution function */
     registerTransFunction(transpose_submit, transpose_submit_desc); 
 
-    /* Register any additional transpose functions */
-    registerTransFunction(trans, trans_desc); 
+    // /* Register any additional transpose functions */
+    // registerTransFunction(trans, trans_desc); 
 
 }
 

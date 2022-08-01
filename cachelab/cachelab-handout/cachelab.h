@@ -10,7 +10,7 @@
 #define MAX_TRACELINE_LEN 32
 #define MM_BSIZE 8
 #define MM_MINIBSIZE 4
-#define MM_BLOCK_H 8
+#define MM_BLOCK_H 23
 #define MM_BLOCK_W 8
 
 #define CACHEBLK_NIL -1
